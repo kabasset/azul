@@ -32,7 +32,15 @@ class Transform(object):
     bgr_curves: tuple = ([(0.5, 0.55)], [], [])
 
 
-def sharpen(data, radii, strength):  # TODO to dedicated module
+def sharpen(data, radii, strength):
+    """
+    Sharpen an image channel-by-channel using unsharp masking.
+
+    Args:
+        data: The image.
+        radii: The channel-wise sharpening radii.
+        strength: The weight applied to the unsharp mask.
+    """
     if strength == 0:
         return data
     for i in range(len(data)):
@@ -41,10 +49,25 @@ def sharpen(data, radii, strength):  # TODO to dedicated module
 
 
 def abmag_to_value(mag, zp):
+    """
+    Convert AB-magnitude to flux.
+
+    Args:
+        mag: The AB-magnitude data (scalar or array).
+        zp: The zero point.
+    """
     return 10 ** ((zp - mag) / 2.5)
 
 
 def stretch_iyjh(iyjh: np.ndarray, transform: Transform):
+    """
+    Stretch the channels according to transformation parameters.
+
+    Channel-wise scaling factors are applied first.
+    Asinh transform is then performed,
+    with black and white points and stretching parameter converted from AB-magnitudes.
+    Negative overshooting is finally compensated.
+    """
     w = transform.bw[1]
     if w == 0:
         w = tune.propose_white_point(iyjh[0], transform.iyjh_zero_points[0])
@@ -61,8 +84,11 @@ def stretch_iyjh(iyjh: np.ndarray, transform: Transform):
 
 
 def iyjh_to_lbgr(iyjh: np.ndarray, transform: Transform):
+    """
+    Blend IYJH channels into L and RGB channels as an LBGR array.
+    """
     i, y, j, h = iyjh
-    lbgr = np.zeros((iyjh.shape[1], iyjh.shape[2], 4), dtype=np.float32)
+    lbgr = np.empty((iyjh.shape[1], iyjh.shape[2], 4), dtype=np.float32)
     lbgr[:, :, 0] = lerp(transform.nir_to_l, np.median(iyjh[1:], axis=0), i)
     lbgr[:, :, 1] = lerp(transform.i_to_b, i, y)
     lbgr[:, :, 2] = lerp(transform.y_to_g, y, j)
@@ -71,6 +97,9 @@ def iyjh_to_lbgr(iyjh: np.ndarray, transform: Transform):
 
 
 def lbgr_to_bgr(lbgr: np.ndarray, transform: Transform):
+    """
+    Adjust hue and saturation, apply lightness.
+    """
     hls = cv2.cvtColor(lbgr[:, :, 1:], cv2.COLOR_BGR2HLS)
     hls[:, :, 0] = (hls[:, :, 0] + transform.hue) % 360
     hls[:, :, 2] = np.clip(hls[:, :, 2] * transform.saturation, 0, 1)
@@ -78,7 +107,7 @@ def lbgr_to_bgr(lbgr: np.ndarray, transform: Transform):
     return cv2.cvtColor(hls, cv2.COLOR_HLS2BGR)
 
 
-def lerp(x, a, b):
+def lerp(x, a, b):  # FIXME duplicated in sequence.py
     if x == 0:
         return b
     if x == 1:
@@ -86,19 +115,10 @@ def lerp(x, a, b):
     return x * a + (1 - x) * b
 
 
-def channelwise_mul(data, factors):
-    for i in range(len(factors)):
-        data[i] = data[i] * factors[i]
-    return data
-
-
-def channelwise_div(data, factors):
-    for i in range(len(factors)):
-        data[i] = data[i] / factors[i]
-    return data
-
-
 def asinh(data: np.ndarray, a: float, black: float):
+    """
+    Asinh transform with 0-to-1 clipping.
+    """
     b = np.arcsinh(black * a)
     data *= a
     np.arcsinh(data, out=data)
@@ -109,6 +129,9 @@ def asinh(data: np.ndarray, a: float, black: float):
 
 
 def adjust_curve(data: np.ndarray, knots: list):
+    """
+    Adjust intensity curve with a cubic spline profile.
+    """
     if knots:
         first = knots[0]
         if first[0] != 0 and first[1] != 0:
