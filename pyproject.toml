@@ -38,6 +38,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest",
+  "pytest-cov",
   "sphinx",
   "sphinxawesome-theme",
   "sphinx-changelog",

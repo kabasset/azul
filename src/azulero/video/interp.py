@@ -35,6 +35,10 @@ def sin_step(start: sequence.IndexedValue, stop: sequence.IndexedValue):
 
 
 def lerp(x, a, b):
+    """
+    Compute ``x * a + (1 - x) * b``.
+    Return early if ``x`` is 0 or 1.
+    """
     if x == 0:
         return b
     if x == 1:
